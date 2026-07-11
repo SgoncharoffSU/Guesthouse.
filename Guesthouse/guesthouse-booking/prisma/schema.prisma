@@ -1,0 +1,276 @@
+generator client {
+  provider   = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole { CUSTOMER ADMIN }
+enum BookingStatus { DRAFT AWAITING_PAYMENT PAID CONFIRMED CANCELLED COMPLETED EXPIRED }
+enum PaymentStatus { PENDING SUCCEEDED FAILED CANCELLED REFUNDED }
+enum AttributeType { TEXT NUMBER BOOLEAN SELECT }
+enum NotificationChannel { SMS EMAIL MESSENGER }
+enum NotificationStatus { PENDING SENT FAILED }
+
+model User {
+  id            String   @id @default(cuid())
+  phone         String   @unique
+  name          String
+  role          UserRole @default(CUSTOMER)
+  passwordHash  String?
+  phoneVerified DateTime?
+  archivedAt    DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  customer      CustomerProfile?
+  bookings      Booking[]
+  auditLogs     AuditLog[] @relation("AuditActor")
+}
+
+model CustomerProfile {
+  id        String @id @default(cuid())
+  userId    String @unique
+  notes     String?
+  user      User   @relation(fields: [userId], references: [id], onDelete: Restrict)
+}
+
+model VerificationCode {
+  id         String   @id @default(cuid())
+  phone      String
+  codeHash   String
+  attempts   Int      @default(0)
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime @default(now())
+  @@index([phone, expiresAt])
+}
+
+model Room {
+  id             String   @id @default(cuid())
+  code           String   @unique
+  slug           String   @unique
+  name           String
+  description    String
+  rules          String?
+  basePriceMinor Int
+  capacity       Int
+  minNights      Int      @default(1)
+  maxNights      Int      @default(30)
+  checkInTime    String   @default("14:00")
+  checkOutTime   String   @default("12:00")
+  isActive       Boolean  @default(true)
+  isRecommended  Boolean  @default(false)
+  archivedAt     DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  images         RoomImage[]
+  attributeValues RoomAttributeValue[]
+  bookings       Booking[]
+  blocks         RoomBlock[]
+  pricingRules   PricingRule[]
+  @@index([isActive, capacity])
+}
+
+model RoomImage {
+  id        String   @id @default(cuid())
+  roomId    String
+  url       String
+  alt       String?
+  sortOrder Int      @default(0)
+  isPrimary Boolean  @default(false)
+  createdAt DateTime @default(now())
+  room      Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  @@index([roomId, sortOrder])
+}
+
+model AttributeDefinition {
+  id          String        @id @default(cuid())
+  key         String        @unique
+  name        String
+  type        AttributeType
+  unit        String?
+  isRequired  Boolean       @default(false)
+  isVisible   Boolean       @default(true)
+  isFilterable Boolean      @default(false)
+  sortOrder   Int           @default(0)
+  archivedAt  DateTime?
+  options     AttributeOption[]
+  values      RoomAttributeValue[]
+}
+
+model AttributeOption {
+  id           String @id @default(cuid())
+  definitionId String
+  value        String
+  label        String
+  sortOrder    Int    @default(0)
+  definition   AttributeDefinition @relation(fields: [definitionId], references: [id], onDelete: Cascade)
+  @@unique([definitionId, value])
+}
+
+model RoomAttributeValue {
+  id           String @id @default(cuid())
+  roomId       String
+  definitionId String
+  textValue    String?
+  numberValue  Decimal?
+  booleanValue Boolean?
+  optionValue  String?
+  room         Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  definition   AttributeDefinition @relation(fields: [definitionId], references: [id], onDelete: Restrict)
+  @@unique([roomId, definitionId])
+}
+
+model Booking {
+  id               String        @id @default(cuid())
+  number           String        @unique
+  userId           String?
+  roomId           String
+  status           BookingStatus @default(DRAFT)
+  checkIn          DateTime      @db.Date
+  checkOut         DateTime      @db.Date
+  nights           Int
+  guestsCount      Int
+  totalMinor       Int
+  prepaymentMinor  Int
+  balanceMinor     Int
+  holdExpiresAt    DateTime?
+  guestName        String
+  guestPhone       String
+  guestComment     String?
+  internalComment  String?
+  source            String       @default("Сайт")
+  cancelledAt      DateTime?
+  completedAt      DateTime?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  user             User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  room             Room          @relation(fields: [roomId], references: [id], onDelete: Restrict)
+  guests           BookingGuest[]
+  payments         Payment[]
+  history          BookingHistory[]
+  @@index([roomId, checkIn, checkOut])
+  @@index([status, holdExpiresAt])
+  @@index([guestPhone])
+}
+
+model BookingGuest {
+  id        String @id @default(cuid())
+  bookingId String
+  name      String
+  age       Int?
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+}
+
+model BookingHistory {
+  id        String   @id @default(cuid())
+  bookingId String
+  fromStatus BookingStatus?
+  toStatus BookingStatus
+  note      String?
+  createdAt DateTime @default(now())
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+}
+
+model RoomBlock {
+  id        String   @id @default(cuid())
+  roomId    String
+  startsAt  DateTime @db.Date
+  endsAt    DateTime @db.Date
+  reason    String
+  createdAt DateTime @default(now())
+  room      Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  @@index([roomId, startsAt, endsAt])
+}
+
+model PricingRule {
+  id             String   @id @default(cuid())
+  roomId         String?
+  name           String
+  startsAt       DateTime @db.Date
+  endsAt         DateTime @db.Date
+  priceMinor     Int
+  priority       Int      @default(0)
+  createdAt      DateTime @default(now())
+  room           Room? @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  @@index([roomId, startsAt, endsAt, priority])
+}
+
+model Payment {
+  id                String        @id @default(cuid())
+  bookingId         String
+  provider          String
+  providerPaymentId String?       @unique
+  idempotencyKey    String        @unique
+  amountMinor       Int
+  currency          String        @default("RUB")
+  status            PaymentStatus @default(PENDING)
+  paymentUrl        String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  booking           Booking       @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  events            PaymentEvent[]
+  @@index([bookingId, status])
+}
+
+model PaymentEvent {
+  id              String   @id @default(cuid())
+  paymentId       String
+  providerEventId String   @unique
+  type            String
+  payloadJson     Json
+  processedAt     DateTime?
+  createdAt       DateTime @default(now())
+  payment         Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+}
+
+model Notification {
+  id        String              @id @default(cuid())
+  userId    String?
+  channel   NotificationChannel
+  recipient String
+  template  String
+  payload   Json
+  status    NotificationStatus @default(PENDING)
+  sentAt    DateTime?
+  error     String?
+  createdAt DateTime @default(now())
+}
+
+model AppSettings {
+  id                     String @id @default("singleton")
+  propertyName           String @default("Гостевой дом")
+  address                String @default("")
+  phone                  String @default("")
+  description            String @default("")
+  logoUrl                 String?
+  timezone                String @default("Europe/Moscow")
+  currency                String @default("RUB")
+  checkInTime             String @default("14:00")
+  checkOutTime            String @default("12:00")
+  prepaymentMode          String @default("PERCENT")
+  prepaymentValue         Int @default(30)
+  minimumPrepaymentMinor Int @default(100000)
+  holdMinutes             Int @default(15)
+  cancellationRules      String @default("")
+  refundRules             String @default("")
+  privacyPolicy           String @default("")
+  personalDataConsent    String @default("")
+  notificationTemplates  Json?
+  updatedAt               DateTime @updatedAt
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String?
+  action    String
+  entity    String
+  entityId  String?
+  metadata  Json?
+  ipHash    String?
+  createdAt DateTime @default(now())
+  actor     User? @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+  @@index([entity, entityId, createdAt])
+}

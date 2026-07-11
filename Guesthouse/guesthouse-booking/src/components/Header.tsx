@@ -1,0 +1,2 @@
+import Link from "next/link";
+export function Header(){ return <header className="border-b bg-white"><div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-4"><Link href="/" className="text-xl font-bold">Гостевой дом</Link><nav className="flex gap-5 text-sm font-medium"><Link href="/rooms">Номера</Link><Link href="/rules">Правила</Link><Link href="/account">Мои бронирования</Link><Link href="/admin">Администратор</Link></nav></div></header> }

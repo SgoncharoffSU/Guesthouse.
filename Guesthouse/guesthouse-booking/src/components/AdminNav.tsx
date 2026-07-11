@@ -1,0 +1,3 @@
+import Link from "next/link";
+const items=[['/admin','Сегодня'],['/admin/calendar','Календарь'],['/admin/bookings','Бронирования'],['/admin/rooms','Номера'],['/admin/attributes','Характеристики'],['/admin/prices','Цены'],['/admin/clients','Клиенты'],['/admin/settings','Настройки']];
+export function AdminNav(){return <aside className="w-full border-b bg-slate-900 p-4 text-white lg:min-h-screen lg:w-64 lg:border-b-0"><div className="mb-6 text-xl font-bold">Управление</div><nav className="grid gap-2 sm:grid-cols-4 lg:grid-cols-1">{items.map(([href,label])=><Link key={href} className="rounded-xl px-4 py-3 text-base hover:bg-slate-700 focus:outline-none focus:ring-2" href={href}>{label}</Link>)}</nav></aside>}
